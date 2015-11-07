@@ -34,7 +34,8 @@ object RelgramsLocalApp {
       opt("noequality", "Count tuples without equality.", {str => noequality = str.toBoolean})
     }
 
-    if (!parser.parse(args)) return
+
+    if(!parser.parse(args.toSeq)) return
 
     assert(equality || noequality, "Both equality or noequality flags are false. One of them must be set true.")
 
