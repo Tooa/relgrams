@@ -8,11 +8,9 @@ package edu.washington.cs.knowitall.relgrams
  * To change this template use File | Settings | File Templates.
  */
 import org.slf4j.LoggerFactory
-import scopt.mutable.OptionParser
 import io.Source
 import java.io.{PrintWriter, File}
 import scopt.mutable.OptionParser
-import scala.Some
 
 
 object RelgramsLocalApp {
@@ -22,8 +20,8 @@ object RelgramsLocalApp {
     var inputPath, outputPath = ""
     var maxWindow = 10
     var maxSize = 5
-    var equality = false
-    var noequality = false
+    var equality = true
+    var noequality = true
 
     val parser = new OptionParser() {
       arg("inputPath", "hdfs input path", {str => inputPath = str})

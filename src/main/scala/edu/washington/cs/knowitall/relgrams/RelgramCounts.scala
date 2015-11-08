@@ -56,9 +56,9 @@ object RelationTuple{
       val arg1 = iterator.next
       val rel = iterator.next
       val arg2 = iterator.next
-      var hashes = iterator.next.split(ID_SEP).map(x => x.toInt).toSet
-      var sentences = iterator.next.split(SENT_SEP).toSet
-      var ids = iterator.next.split(ID_SEP).toSet
+      val hashes = iterator.next.split(ID_SEP).map(x => x.toInt).toSet
+      val sentences = iterator.next.split(SENT_SEP).toSet
+      val ids = iterator.next.split(ID_SEP).toSet
       var arg1HeadCounts = new mutable.HashMap[String, Int]()
       if (iterator.hasNext) arg1HeadCounts ++= MapUtils.StringIntMapfromSafeCountsString(iterator.next)
       var arg2HeadCounts = new mutable.HashMap[String, Int]()

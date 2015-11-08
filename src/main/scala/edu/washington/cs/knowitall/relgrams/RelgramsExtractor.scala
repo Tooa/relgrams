@@ -9,21 +9,18 @@ package edu.washington.cs.knowitall.relgrams
  */
 
 
-import scala.collection.JavaConversions._
-
-import collection.mutable.{ArrayBuffer, HashMap}
-import collection.mutable
-import io.Source
 import java.io.PrintWriter
-import org.slf4j.LoggerFactory
-import scala.Predef._
-import scala.Some
 
-
+import edu.washington.cs.knowitall.relgrams.utils.MapUtils
 import edu.washington.cs.knowitall.relgrams.utils.MapUtils._
-import utils.MapUtils
 import edu.washington.cs.knowitall.tool.coref.Mention
-import edu.washington.cs.knowitall.tool.postag.PostaggedToken
+import org.slf4j.LoggerFactory
+
+import scala.Predef._
+import scala.collection.JavaConversions._
+import scala.collection.mutable
+import scala.collection.mutable.HashMap
+import scala.io.Source
 
 class RelgramsExtractor(maxWindow:Int, equality:Boolean, noequality:Boolean) {
 
@@ -103,8 +100,8 @@ class RelgramsExtractor(maxWindow:Int, equality:Boolean, noequality:Boolean) {
 
   def extractRelgramsFromDocument(document:TuplesDocumentWithCorefMentions): (Map[String, RelgramCounts], Map[String, RelationTupleCounts]) = {
 
-    var relgramCountsMap = new mutable.HashMap[String, RelgramCounts]()
-    var relationTuplesMap = new mutable.HashMap[String, RelationTuple]()
+    val relgramCountsMap = new mutable.HashMap[String, RelgramCounts]()
+    val relationTuplesMap = new mutable.HashMap[String, RelationTuple]()
 
     def assignIndex(records:Seq[TypedTuplesRecord]) = {
       var index = 0
@@ -119,25 +116,22 @@ class RelgramsExtractor(maxWindow:Int, equality:Boolean, noequality:Boolean) {
       })
     }
     val prepositions = Set[String] ("in", "on", "at", "over", "by", "after", "near", "of")
-    def hasPreposition(rel:String) = rel.split(" ").find(x => prepositions.contains(x))
+    def hasPreposition(rel:String): Option[String] = rel.split(" ").find(x => prepositions.contains(x))
     def hasInferredPrepRelation(record:TypedTuplesRecord) = hasPreposition(record.relHead) match {
-      case Some(x:String) => !record.sentence.split(" ").contains(x)
+      case Some(prep:String) => !record.sentence.split(" ").contains(prep)
       case None => false
     }
+
+
+
     val prunedRecords:Seq[(TypedTuplesRecord, Int)] = assignIndex(document.tuplesDocument
                                                                           .tupleRecords
                                                                           .filter(record => !hasInferredPrepRelation(record)))
 
-                                                              //.filter(record => notInferredPrepRelation(record))
-                                                              //.sortBy(r => (r.sentid, r.extrid))
-                                                              //.zipWithIndex
-    /**println("Docsize\t%d\t%d\t%d\t%d".format(document.tuplesDocument.tupleRecords.size,
-                                             prunedRecords.size,
-                                             prunedRecords.map(r => r._1.sentid).max,
-                                             prunedRecords.map(r => r._2).max))*/
     val mentions = document.mentions
-    val sentencesWithOffsets = if(equality){
-    val trimdocument = TuplesDocumentGenerator.trimDocument(document.tuplesDocument)
+    // Maps from sentenceId to the respective offset e.g sentenceId 0 -> (0,0)
+    val sentencesWithOffsets: mutable.Map[Int, Int] = if(equality){
+      val trimdocument = TuplesDocumentGenerator.trimDocument(document.tuplesDocument)
       TuplesDocumentGenerator.sentenceIdsWithOffsets(trimdocument)._2
     }else{
       mutable.Map[Int, Int]()
@@ -168,13 +162,15 @@ class RelgramsExtractor(maxWindow:Int, equality:Boolean, noequality:Boolean) {
     }
 
     val prunedMentions = pruneMentions(mentions)
-    var rtcountsMap = new mutable.HashMap[String, RelationTupleCounts]()
+    val rtcountsMap = new mutable.HashMap[String, RelationTupleCounts]()
     val recordRelationTuples = new mutable.HashMap[(Int, Int), mutable.HashSet[RelationTuple]]()
+
+
     getRecordsIterator.foreach(index => {
       val record = index._1
       val (arg1s, arg2s) = argRepresentations(record)
-      var sentences = new mutable.HashSet[String]()
-      var ids = new mutable.HashSet[String]()
+      val sentences = new mutable.HashSet[String]()
+      val ids = new mutable.HashSet[String]()
       val rel = record.relHead
       arg1s.foreach(arg1 => {
         arg2s.foreach(arg2 => {
@@ -182,71 +178,70 @@ class RelgramsExtractor(maxWindow:Int, equality:Boolean, noequality:Boolean) {
         })
       })
     })
-    def areFromDifferentExtractions(one:TypedTuplesRecord, other:TypedTuplesRecord) = one.sentid != other.sentid || one.extrid != other.extrid
-    getRecordsIterator.foreach(outerIndex => {
 
-      val outer = outerIndex._1
-      val oindex = outerIndex._2
-      val outerStartOffset = if(equality) startingOffset(outer) else 0
-      val outerRelationTuples = recordRelationTuples.get((outer.sentid, outer.extrid)).get
+    def areFromDifferentExtractions(one:TypedTuplesRecord, other:TypedTuplesRecord) = one.sentid != other.sentid || one.extrid != other.extrid
+
+
+    getRecordsIterator.foreach { case (outerTupledRecord, outerIndex) =>
+
+      val outerStartOffset = if(equality) startingOffset(outerTupledRecord) else 0
+      val outerRelationTuples: mutable.HashSet[RelationTuple] = recordRelationTuples.get((outerTupledRecord.sentid, outerTupledRecord.extrid)).get
       val addedSeconds = new mutable.HashSet[String]()
 
-      getRecordsIterator.filter(innerIndex => {
-                           val inner = innerIndex._1
-                           val filterVal = areFromDifferentExtractions(outer, inner)
-                           filterVal
-                        })
-                        .filter(innerIndex => {
-                            val filterVal = (innerIndex._2 > oindex) && (innerIndex._2 <= oindex+maxWindow)
-                            val inner = innerIndex._1
-                            filterVal
-                        })
-                        .filter(innerIndex => { val inner = innerIndex._1
-                            val filterVal = if(outer.sentid == inner.sentid) !subsumes(outer, inner) else false//outer.sentid != inner.sentid || !subsumes(outer, inner)
-                            filterVal
-                        })
-                        .foreach(innerIndex => {
-        val iindex = innerIndex._2
-        val countWindow = iindex-oindex
-        val inner = innerIndex._1
+      // Take only different pairs into account i.e. different sentenceId or different extriId
+      val differentPairs = getRecordsIterator.filter { case(innerTupledRecord, _) =>
+        areFromDifferentExtractions(outerTupledRecord, innerTupledRecord)
+      }
+      // Take only pairs within the given window size into account
+      val withinWindowSize = differentPairs.filter { case(_, innerIndex) =>
+          (innerIndex > outerIndex) && (innerIndex <= outerIndex + maxWindow)
+      }
+      // In case, the sentenceId is the same and just the exriId differs,
+      // proof that the actual relation tuple differs i.e. different head, rel, etc.
+      withinWindowSize.filter { case(innerTupledRecord, _) =>
+        if(outerTupledRecord.sentid == innerTupledRecord.sentid) !subsumes(outerTupledRecord, innerTupledRecord) else true //outer.sentid != inner.sentid || !subsumes(outer, inner)
+      }
+      .foreach{ case(innerTupledRecord, innerIndex) =>
+          val countWindow = innerIndex-outerIndex
 
-        val corefArgs:Option[(String, String, String, String)] = equality match {
-          case true => {
-            val innerStartOffset = startingOffset(inner)
-            CoreferringArguments.coreferringArgs(outer, outerStartOffset, inner, innerStartOffset, prunedMentions)
-          }
-          case false => None
-        }
-        val innerRelationTuples = recordRelationTuples.get((inner.sentid, inner.extrid)).get
-
-        import edu.washington.cs.knowitall.relgrams.utils.Crossable._
-        val firstSeconds = (outerRelationTuples x innerRelationTuples)
-          firstSeconds.foreach(firstsecond => {
-          val first = firstsecond._1
-          val second = firstsecond._2
-          noequality match {
+          val corefArgs:Option[(String, String, String, String)] = equality match {
             case true => {
-              val relKey = relgramKey(first, second)
-              if (!addedSeconds.contains(relKey)) {
-                //val sentWindow = (inner.sentid - outer.sentid)
-                //println("Adding relgrams with countWindow: " + countWindow + " and from sentences: " + inner.sentid + " and " + outer.sentid + " sent window: " + sentWindow)
-                addToRelgramCounts(outer, inner, first, second, countWindow, relgramCountsMap)
+              val innerStartOffset = startingOffset(innerTupledRecord)
+              CoreferringArguments.coreferringArgs(outerTupledRecord, outerStartOffset, innerTupledRecord, innerStartOffset, prunedMentions)
+            }
+            case false => None
+          }
+          val innerRelationTuples = recordRelationTuples.get((innerTupledRecord.sentid, innerTupledRecord.extrid)).get
+
+          import edu.washington.cs.knowitall.relgrams.utils.Crossable._
+          val firstSeconds = (outerRelationTuples x innerRelationTuples)
+            firstSeconds.foreach(firstsecond => {
+            val first = firstsecond._1
+            val second = firstsecond._2
+            noequality match {
+              case true => {
+                val relKey = relgramKey(first, second)
+                if (!addedSeconds.contains(relKey)) {
+                  val sentWindow = (innerTupledRecord.sentid - outerTupledRecord.sentid)
+                  //println("Adding relgrams with countWindow: " + countWindow + " and from sentences: " + innerTupledRecord.sentid + " and " + outerTupledRecord.sentid + " sent window: " + sentWindow)
+                  addToRelgramCounts(outerTupledRecord, innerTupledRecord, first, second, countWindow, relgramCountsMap)
+                }
+                addedSeconds += relKey
               }
-              addedSeconds += relKey
+              case false =>
             }
-            case false =>
-          }
 
-          corefArgs match {
-            case Some(resolvedArgs:(String, String, String, String)) => {
-              extractEqualityRelgrams(resolvedArgs, outer, inner, first, second, relationTuplesMap, relgramCountsMap, rtcountsMap, countWindow, addedSeconds)
+            corefArgs match {
+              case Some(resolvedArgs:(String, String, String, String)) => {
+                extractEqualityRelgrams(resolvedArgs, outerTupledRecord, innerTupledRecord, first, second, relationTuplesMap, relgramCountsMap, rtcountsMap, countWindow, addedSeconds)
+              }
+              case None =>
             }
-            case None =>
-          }
 
-        })
-      })
-    })
+          })
+        }
+    }
+
     val outputRelationCountsMap = new mutable.HashMap[String, RelationTupleCounts]()
     rtcountsMap.foreach(kv => {
       val splits = splitRTCKey(kv._1)

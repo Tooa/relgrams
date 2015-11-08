@@ -32,7 +32,7 @@ object TuplesDocumentGenerator{
   }
 
   def sentenceIdsWithOffsets(document: TuplesDocument) = {//List[(String, Int)] = {
-  var offset = 0
+    var offset = 0
     var sentencesMap = new HashMap[Int, String]//new ArrayBuffer[String]()
     var sentidOffsetsMap = new mutable.HashMap[Int, Int]()
     document.tupleRecords.iterator.foreach(record => sentencesMap += record.sentid -> record.sentence)
@@ -40,7 +40,7 @@ object TuplesDocumentGenerator{
     var offsets = new ArrayBuffer[Int]()
     sentencesMap.keys.toSeq.sortBy(key => key).foreach(key => {//document.tupleRecords.iterator.foreach(record => {
     //println("key: " + key)
-    val sentence = sentencesMap(key)
+      val sentence = sentencesMap(key)
       sentences += sentence
       offsets += offset
       sentidOffsetsMap += key -> offset
